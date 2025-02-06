@@ -1,33 +1,40 @@
+# This script converts a Python script containing SQL operations into a Jupyter Notebook.
+# It reads the Python file, extracts relevant code cells, and writes them into a .ipynb file.
+
 import nbformat
 
-def convert_py_to_ipynb(py_file_path, ipynb_file_path):
-    with open(py_file_path, 'r') as py_file:
-        lines = py_file.readlines()
+with open(py_file_path, 'r') as py_file:
+    lines = py_file.readlines()
+
+notebook = nbformat.v4.new_notebook()
+cells = []
+current_cell = []
+
+# Iterating through each line to check indentation and extract code blocks
+for line in lines:
+    stripped_line = line.strip()
     
-    notebook = nbformat.v4.new_notebook()
-    cells = []
-    current_cell = []
+    if stripped_line.startswith("def "):
+        continue  # Skip function definition lines
     
-    for line in lines:
-        stripped_line = line.strip()
-        
-        if "SQL(" in stripped_line:
-            if current_cell:
-                cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
-            current_cell = [line]
-        else:
-            current_cell.append(line)
-        
-        if "write.mode(" in stripped_line or "createorreplacetempview" in stripped_line:
-            cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
-            current_cell = []
+    if "SQL(" in stripped_line:
+        if current_cell:
+            cells.append(nbformat.v4.new_code_cell("".join([line.lstrip() for line in current_cell])))
+        current_cell = [line]
+    else:
+        # Append line to current cell, maintaining indentation
+    current_cell.append(line)
     
-    if current_cell:
-        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
-    
-    notebook.cells = cells
-    
-    with open(ipynb_file_path, 'w') as ipynb_file:
-        nbformat.write(notebook, ipynb_file)
-    
-    print(f"Jupyter Notebook saved as {ipynb_file_path}")
+    if "write.mode(" in stripped_line or "createorreplacetempview" in stripped_line:
+        cells.append(nbformat.v4.new_code_cell("".join([line.lstrip() for line in current_cell])))
+        current_cell = []
+
+if current_cell:
+    cells.append(nbformat.v4.new_code_cell("".join([line.lstrip() for line in current_cell])))
+
+notebook.cells = cells
+
+with open(ipynb_file_path, 'w') as ipynb_file:
+    nbformat.write(notebook, ipynb_file)
+
+print(f"Jupyter Notebook saved as {ipynb_file_path}")
