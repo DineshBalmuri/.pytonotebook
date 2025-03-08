@@ -21,8 +21,7 @@ def process_lines(lines):
     skipped_def = False
     
     # Adding default content as the first cell
-    default_content = add_default_content()
-    cells.append(nbformat.v4.new_code_cell("".join(default_content)))
+    current_cell.extend(add_default_content())
 
     for line in lines:
         stripped_line = line.strip()
@@ -44,13 +43,13 @@ def process_lines(lines):
             cells, current_cell, inside_function, inside_for_loop = handle_general_line(cells, current_cell, line, inside_function, def_indentation, inside_for_loop, for_indentation)
 
     if current_cell:
-        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+        cells.append("".join(current_cell))
     
     return cells
 
 def handle_function_start(cells, current_cell, line):
     if current_cell:
-        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+        cells.append("".join(current_cell))
         current_cell = []
     inside_function = True
     def_indentation = len(line) - len(line.lstrip())
@@ -59,7 +58,7 @@ def handle_function_start(cells, current_cell, line):
 
 def handle_loop_start(cells, current_cell, line):
     if current_cell:
-        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+        cells.append("".join(current_cell))
         current_cell = []
     inside_for_loop = True
     for_indentation = len(line) - len(line.lstrip())
@@ -68,10 +67,10 @@ def handle_loop_start(cells, current_cell, line):
 
 def handle_sql_block(cells, current_cell, line):
     if current_cell:
-        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+        cells.append("".join(current_cell))
         current_cell = []
     current_cell.append(line)
-    cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+    cells.append("".join(current_cell))
     current_cell = []
     return cells, current_cell
 
@@ -82,7 +81,7 @@ def handle_general_line(cells, current_cell, line, inside_function, def_indentat
         current_cell.append(line)
     else:
         if current_cell:
-            cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+            cells.append("".join(current_cell))
         current_cell = [line]
         inside_function = False
         inside_for_loop = False
@@ -90,7 +89,7 @@ def handle_general_line(cells, current_cell, line, inside_function, def_indentat
 
 def save_notebook(cells, ipynb_file_path):
     notebook = nbformat.v4.new_notebook()
-    notebook.cells = cells
+    notebook.cells = [nbformat.v4.new_code_cell(cell) for cell in cells]
     with open(ipynb_file_path, 'w') as ipynb_file:
         nbformat.write(notebook, ipynb_file)
     print(f"Jupyter Notebook saved as {ipynb_file_path}")
