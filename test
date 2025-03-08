@@ -7,6 +7,9 @@ def read_file(py_file_path):
     with open(py_file_path, 'r') as py_file:
         return py_file.readlines()
 
+def add_default_content():
+    return ["# This is the default content added before the extracted cells\n"]
+
 def process_lines(lines):
     cells = []
     current_cell = []
@@ -16,6 +19,10 @@ def process_lines(lines):
     for_indentation = None
     skipped_import = False
     skipped_def = False
+    
+    # Adding default content as the first cell
+    default_content = add_default_content()
+    cells.append(nbformat.v4.new_code_cell("".join(default_content)))
 
     for line in lines:
         stripped_line = line.strip()
@@ -115,9 +122,3 @@ def test_line_count(py_file_path):
 # Example usage:
 # convert("script.py", "output.ipynb")
 # test_line_count("script.py")
-
-
-with open(ipynb_file_path, 'w') as ipynb_file:
-    nbformat.write(notebook, ipynb_file)
-
-print(f"Jupyter Notebook saved as {ipynb_file_path}")
