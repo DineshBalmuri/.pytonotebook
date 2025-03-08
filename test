@@ -3,36 +3,119 @@
 
 import nbformat
 
-with open(py_file_path, 'r') as py_file:
-    lines = py_file.readlines()
+def read_file(py_file_path):
+    with open(py_file_path, 'r') as py_file:
+        return py_file.readlines()
 
-notebook = nbformat.v4.new_notebook()
-cells = []
-current_cell = []
+def process_lines(lines):
+    cells = []
+    current_cell = []
+    inside_function = False
+    def_indentation = None
+    inside_for_loop = False
+    for_indentation = None
+    skipped_import = False
+    skipped_def = False
 
-# Iterating through each line to check indentation and extract code blocks
-for line in lines:
-    stripped_line = line.strip()
+    for line in lines:
+        stripped_line = line.strip()
+        
+        if stripped_line.startswith("import ") and not skipped_import:
+            skipped_import = True
+            continue
+        if stripped_line.startswith("def ") and not skipped_def:
+            skipped_def = True
+            continue
+        
+        if stripped_line.startswith("def "):
+            cells, current_cell, inside_function, def_indentation = handle_function_start(cells, current_cell, line)
+        elif stripped_line.startswith("for ") or stripped_line.startswith("while "):
+            cells, current_cell, inside_for_loop, for_indentation = handle_loop_start(cells, current_cell, line)
+        elif "SQL(" in stripped_line or "write.mode(" in stripped_line or "createorreplacetempview" in stripped_line:
+            cells, current_cell = handle_sql_block(cells, current_cell, line)
+        else:
+            cells, current_cell, inside_function, inside_for_loop = handle_general_line(cells, current_cell, line, inside_function, def_indentation, inside_for_loop, for_indentation)
+
+    if current_cell:
+        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
     
-    if stripped_line.startswith("def "):
-        continue  # Skip function definition lines
-    
-    if "SQL(" in stripped_line:
-        if current_cell:
-            cells.append(nbformat.v4.new_code_cell("".join([line.lstrip() for line in current_cell])))
-        current_cell = [line]
-    else:
-        # Append line to current cell, maintaining indentation
-    current_cell.append(line)
-    
-    if "write.mode(" in stripped_line or "createorreplacetempview" in stripped_line:
-        cells.append(nbformat.v4.new_code_cell("".join([line.lstrip() for line in current_cell])))
+    return cells
+
+def handle_function_start(cells, current_cell, line):
+    if current_cell:
+        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
         current_cell = []
+    inside_function = True
+    def_indentation = len(line) - len(line.lstrip())
+    current_cell.append(line)
+    return cells, current_cell, inside_function, def_indentation
 
-if current_cell:
-    cells.append(nbformat.v4.new_code_cell("".join([line.lstrip() for line in current_cell])))
+def handle_loop_start(cells, current_cell, line):
+    if current_cell:
+        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+        current_cell = []
+    inside_for_loop = True
+    for_indentation = len(line) - len(line.lstrip())
+    current_cell.append(line)
+    return cells, current_cell, inside_for_loop, for_indentation
 
-notebook.cells = cells
+def handle_sql_block(cells, current_cell, line):
+    if current_cell:
+        cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+        current_cell = []
+    current_cell.append(line)
+    cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+    current_cell = []
+    return cells, current_cell
+
+def handle_general_line(cells, current_cell, line, inside_function, def_indentation, inside_for_loop, for_indentation):
+    if inside_function and (len(line) - len(line.lstrip()) > def_indentation):
+        current_cell.append(line)
+    elif inside_for_loop and (len(line) - len(line.lstrip()) > for_indentation):
+        current_cell.append(line)
+    else:
+        if current_cell:
+            cells.append(nbformat.v4.new_code_cell("".join(current_cell)))
+        current_cell = [line]
+        inside_function = False
+        inside_for_loop = False
+    return cells, current_cell, inside_function, inside_for_loop
+
+def save_notebook(cells, ipynb_file_path):
+    notebook = nbformat.v4.new_notebook()
+    notebook.cells = cells
+    with open(ipynb_file_path, 'w') as ipynb_file:
+        nbformat.write(notebook, ipynb_file)
+    print(f"Jupyter Notebook saved as {ipynb_file_path}")
+
+def convert(py_file_path, ipynb_file_path):
+    lines = read_file(py_file_path)
+    cells = process_lines(lines)
+    save_notebook(cells, ipynb_file_path)
+
+def test_line_count(py_file_path):
+    lines = read_file(py_file_path)
+    filtered_lines = []
+    skipped_import = False
+    skipped_def = False
+    
+    for line in lines:
+        stripped_line = line.strip()
+        if stripped_line.startswith("import ") and not skipped_import:
+            skipped_import = True
+            continue
+        if stripped_line.startswith("def ") and not skipped_def:
+            skipped_def = True
+            continue
+        filtered_lines.append(line)
+    
+    print(f"Total lines after skipping import and first def: {len(filtered_lines)}")
+    return len(filtered_lines)
+
+# Example usage:
+# convert("script.py", "output.ipynb")
+# test_line_count("script.py")
+
 
 with open(ipynb_file_path, 'w') as ipynb_file:
     nbformat.write(notebook, ipynb_file)
