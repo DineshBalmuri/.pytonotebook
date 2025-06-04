@@ -1,0 +1,124 @@
+import os
+import pandas as pd
+from datetime import datetime
+
+def get_losses_columns(df):
+    # Dummy placeholder for actual logic
+    return df.get("losses_total", 0)
+
+def generate_reason_for_row_mismatch(df, module_name, limited_validation_modules, output_path):
+    if module_name not in limited_validation_modules or module_name == "mod16":
+        return ""
+
+    if not os.path.exists(output_path):
+        return ""  # No previous data to compare with
+
+    existing_df = pd.read_csv(output_path)
+    if existing_df.empty:
+        return ""
+
+    last_row = existing_df.iloc[-1]
+    new_row_count = df.count()
+    last_row_count = int(last_row.get("row_count", 0))
+    diff = abs(new_row_count - last_row_count)
+
+    if module_name == "mod17":
+        if diff <= 300:
+            return "Expected variation for mod17"
+        else:
+            raise ValueError(f"Row count difference for module 'mod17' is {diff}, which exceeds the 300 limit.")
+    else:
+        if diff <= 100:
+            return f"Expected variation for limited module {module_name}"
+        else:
+            raise ValueError(f"Row count difference for module '{module_name}' is {diff}, which exceeds the 100 limit.")
+
+def write_and_validate_summary(
+    df,
+    module_name: str,
+    base_filename: str = "summary"
+) -> None:
+    """
+    Summarizes a DataFrame, compares to last entry in the summary CSV (with date-based dynamic naming),
+    and appends if valid.
+    Parameters:
+    - df: PySpark DataFrame
+    - columns_to_sum: List of columns to sum
+    - output_folder: Directory where summary CSVs are stored
+    - module_name: Name of the module (e.g., 'mod17')
+    - base_filename: Base name for the output file (default = 'summary')
+    """
+    if module_name.startswith("mod"):
+        module_name = module_name.split('.')[0]
+
+    # Generate dated filename
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    output_path = f"{base_filename}_{today_str}.csv"
+
+    # List out modules for limited validations
+    limited_validation_modules = ["mod13", "mod15", "mod16", "mod17", "fbop15", "fbop31", "fbop32", "fbop35"]
+    column_validation_exception_modules = ["mod7"]
+
+    # Prepare new summary
+    row_count = df.count()
+    col_count = len(df.columns)
+    wp_total = sum(df.columns)  # Dummy logic; replace with actual sum logic
+    losses_total = get_losses_columns(df)
+    reason = generate_reason_for_row_mismatch(df, module_name, limited_validation_modules, output_path)
+
+    summary_dict = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "module": module_name,
+        "row_count": row_count,
+        "column_count": col_count,
+        "losses_total": losses_total,
+        "Reason": reason,
+    }
+
+    new_summary_df = pd.DataFrame([summary_dict])
+
+    if os.path.exists(output_path):
+        existing_df = pd.read_csv(output_path)
+
+        if not existing_df.empty:
+            last_row = existing_df.iloc[-1].to_dict()
+
+            # Determine if full or partial validation is needed
+            is_limited = module_name.lower() in limited_validation_modules
+
+            # Always validate column count
+            keys_to_validate = ["column_count"]
+            if module_name in column_validation_exception_modules:
+                keys_to_validate = []
+
+            if not is_limited:
+                # Validate everything including totals, fees
+                keys_to_validate = ["row_count", "wp_total"]
+
+                # Extra validation: loss columns if present and after mod15
+                if int(''.join(filter(str.isdigit, module_name))) > 15:
+                    keys_to_validate.append('losses_total')
+
+            # Perform validation
+            for key in keys_to_validate:
+                if key == "column_count":
+                    if last_row.get(key) != summary_dict.get(key):
+                        raise ValueError(
+                            f"Validation failed for module '{module_name}':\n"
+                            f"Column '{key}' mismatch. New: {summary_dict.get(key)}, Expected: {last_row.get(key)}."
+                        )
+                elif int(last_row.get(key)) != int(summary_dict.get(key)):
+                    raise ValueError(
+                        f"Validation failed for module '{module_name}':\n"
+                        f"Column '{key}' mismatch. New: {summary_dict.get(key)}, Expected: {last_row.get(key)}."
+                    )
+
+        # Append new summary
+        updated_df = pd.concat([existing_df, new_summary_df], ignore_index=True)
+        updated_df.to_csv(output_path, index=False)
+
+    else:
+        # First file creation
+        new_summary_df.to_csv(output_path, index=False)
+
+    print(f"Successfully validated and appended summary for module '{module_name}'.")
