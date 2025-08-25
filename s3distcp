@@ -1,0 +1,32 @@
+import subprocess
+
+def run_s3distcp_delete_and_copy(source_path, destination_path):
+    """
+    Runs s3-dist-cp commands directly:
+    1. Delete destination contents.
+    2. Copy source to destination.
+
+    Assumes:
+    - s3-dist-cp is available in PATH (e.g., on an EMR cluster).
+    - AWS credentials are already configured in the environment.
+    """
+
+    # Step 1: Delete destination
+    delete_cmd = [
+        "s3-dist-cp",
+        "--src", destination_path,
+        "--delete"
+    ]
+    print(f"Deleting contents at {destination_path}...")
+    subprocess.run(delete_cmd, check=True)
+    print(f"Deletion complete at {destination_path}.")
+
+    # Step 2: Copy source to destination
+    copy_cmd = [
+        "s3-dist-cp",
+        "--src", source_path,
+        "--dest", destination_path
+    ]
+    print(f"Copying from {source_path} to {destination_path}...")
+    subprocess.run(copy_cmd, check=True)
+    print(f"Copy completed from {source_path} to {destination_path}.")
